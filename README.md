@@ -3,7 +3,7 @@
 ## Submission — [DoneByNaveed](https://github.com/Naveedkhosa/DoneByNaveed)
 
 - **Fix:** Bundle Builder dead page on dev-store clone — see `NOTE.md`
-- **Loom:** _Paste your 3-minute walkthrough URL here before submitting_
+- **Loom:** https://www.loom.com/share/a446bb68082d4090907da8b6f8389f86
 
 Screenshots: `before.png` (empty default template) · `after.png` (bundle builder UI)
 

@@ -147,15 +147,33 @@ function collectReferencedProductHandles() {
   return handles;
 }
 
+/** Series/model tags used by bundle-builder when dev-store collections are empty shells. */
+const BUNDLE_BUILDER_TAGS = [
+  'series:mo', 'series:lan', 'series:supreme', 'series:retro',
+  'model:x05z', 'model:pm8m', 'model:pm8o',
+  'series:elegant', 'series:yu', 'series:yi', 'series:master', 'series:ji', 'series:pin',
+];
+
+function collectBundleBuilderProductHandles(products) {
+  const handles = new Set();
+  for (const p of products) {
+    const tags = p.tags || '';
+    if (BUNDLE_BUILDER_TAGS.some((t) => tags.includes(t))) handles.add(p.handle);
+  }
+  return handles;
+}
+
 let productsToCreate;
 if (FULL) {
   productsToCreate = seed.products;
 } else {
   const referenced = collectReferencedProductHandles();
+  const bundleHandles = collectBundleBuilderProductHandles(seed.products);
   const byHandle = new Map(seed.products.map((p) => [p.handle, p]));
-  // Always include products referenced by the theme, then fill remaining slots
-  const priority = [...referenced].map((h) => byHandle.get(h)).filter(Boolean);
-  const remaining = seed.products.filter((p) => !referenced.has(p.handle));
+  const priorityHandles = new Set([...referenced, ...bundleHandles]);
+  // Always include products referenced by the theme + bundle-builder series, then backfill
+  const priority = [...priorityHandles].map((h) => byHandle.get(h)).filter(Boolean);
+  const remaining = seed.products.filter((p) => !priorityHandles.has(p.handle));
   productsToCreate = [...priority, ...remaining.slice(0, Math.max(0, SLIM_PRODUCTS - priority.length))];
   console.log(`Slim seed: ${priority.length} theme-referenced + ${productsToCreate.length - priority.length} backfill = ${productsToCreate.length} products`);
 }
@@ -356,7 +374,10 @@ if (WRITE) {
 console.log(`\n=== Pages (${seed.pages.length}) ===`);
 if (WRITE) {
   const res = await pool(seed.pages, async (p) => {
-    await api('POST', 'pages.json', { page: { title: p.title, handle: p.handle, body_html: p.body_html, published: true } });
+    const page = { title: p.title, handle: p.handle, body_html: p.body_html, published: true };
+    // Bundle Builder ships as page.bundle-builder.json — without this suffix the page renders empty main-page.
+    if (p.handle === 'bundle-builder') page.template_suffix = 'bundle-builder';
+    await api('POST', 'pages.json', { page });
   });
   created.pages = res.ok;
   console.log(`  ${res.ok} created, ${res.fail} failed`);

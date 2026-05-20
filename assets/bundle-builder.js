@@ -14,6 +14,7 @@ class BundleBuilderComponent extends Component {
   #minItems = 3;
   #maxItems = 8;
   #isAddingToCart = false;
+  #moneyFormat = '${{amount}}';
 
   /** @type {string} Currently active series filter handle ('all' = show all) */
   #activeTab = 'all';
@@ -31,6 +32,7 @@ class BundleBuilderComponent extends Component {
   #parseConfig() {
     this.#minItems = parseInt(this.dataset.minItems) || 3;
     this.#maxItems = parseInt(this.dataset.maxItems) || 8;
+    this.#moneyFormat = this.dataset.moneyFormat || this.#moneyFormat;
     try {
       this.#tiers = JSON.parse(this.dataset.tiers || '[]');
       this.#tiers.sort((a, b) => a.minItems - b.minItems);
@@ -58,6 +60,25 @@ class BundleBuilderComponent extends Component {
   handleCardClick(event) {
     const card = event.target.closest('.bundle-card');
     if (!card) return;
+    this.#toggleCardSelection(card, event);
+  }
+
+  /**
+   * Keyboard selection for bundle cards (WCAG 2.1 — operable without pointer).
+   * @param {KeyboardEvent} event
+   */
+  handleCardKeydown(event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const card = event.target.closest('.bundle-card');
+    if (!card) return;
+    this.#toggleCardSelection(card, event);
+  }
+
+  /**
+   * @param {HTMLElement} card
+   * @param {Event} event
+   */
+  #toggleCardSelection(card, event) {
     if (card.dataset.available === 'false') return;
 
     event.preventDefault();
@@ -79,7 +100,6 @@ class BundleBuilderComponent extends Component {
       card.setAttribute('aria-pressed', 'true');
     }
 
-    // Micro-interaction: brief scale pulse for tactile feedback
     card.style.transform = 'scale(0.97)';
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -469,6 +489,9 @@ class BundleBuilderComponent extends Component {
   }
 
   #formatMoney(cents) {
+    if (typeof Shopify !== 'undefined' && typeof Shopify.formatMoney === 'function') {
+      return Shopify.formatMoney(cents, this.#moneyFormat);
+    }
     return '$' + (cents / 100).toFixed(2);
   }
 

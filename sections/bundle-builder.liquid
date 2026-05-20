@@ -65,6 +65,7 @@
     data-min-items="{{ min_items }}"
     data-max-items="{{ max_items }}"
     data-tiers='{{ tiers_json | strip_newlines }}'
+    data-money-format="{{ shop.money_format | escape }}"
     style="
       --padding-block-start: {{ section.settings.padding_block_start | default: 60 }}px;
       --padding-block-end: {{ section.settings.padding_block_end | default: 120 }}px;
@@ -133,13 +134,18 @@
       {%- assign seen_product_ids = "," -%}
       {%- assign has_products = false -%}
 
-      {%- comment -%} Pre-scan to check if any products exist {%- endcomment -%}
+      {%- comment -%} Pre-scan: collection products or tag fallback on dev stores {%- endcomment -%}
       {%- for block in series_blocks -%}
         {%- if block.settings.collection != blank and block.settings.collection.products.size > 0 -%}
           {%- assign has_products = true -%}
           {%- break -%}
         {%- endif -%}
       {%- endfor -%}
+      {%- unless has_products -%}
+        {%- if collections.all.products.size > 0 -%}
+          {%- assign has_products = true -%}
+        {%- endif -%}
+      {%- endunless -%}
 
       {%- if has_products -%}
         <div class="bundle-builder__grid" ref="grid">
@@ -147,20 +153,76 @@
           {%- for block in series_blocks -%}
             {%- assign coll = block.settings.collection -%}
             {%- if coll != blank -%}
-              {%- for product in coll.products -%}
-                {%- unless product.tags contains 'engraving-fee' -%}
-                  {%- comment -%} Skip sold-out products {%- endcomment -%}
-                  {%- unless product.available -%}
-                    {%- continue -%}
-                  {%- endunless -%}
+              {%- liquid
+                assign series_tag = ''
+                assign model_tag = ''
+                case coll.handle
+                  when 'xinzuo-mo-series-knives'
+                    assign series_tag = 'series:mo'
+                  when 'xinzuo-lan-series-knives'
+                    assign series_tag = 'series:lan'
+                  when 'hezhen-supreme-series-knives'
+                    assign series_tag = 'series:supreme'
+                  when 'hezhen-retro-series-knives'
+                    assign series_tag = 'series:retro'
+                  when 'zhen-x05z-series'
+                    assign model_tag = 'model:x05z'
+                  when 'pm8m-zhen-series'
+                    assign model_tag = 'model:pm8m'
+                  when 'pm8o-zhen-series'
+                    assign model_tag = 'model:pm8o'
+                  when 'b38l-elegant-series'
+                    assign series_tag = 'series:elegant'
+                  when 'b13r-yu-series'
+                    assign series_tag = 'series:yu'
+                  when 'b27-yi-series'
+                    assign series_tag = 'series:yi'
+                  when 'b30-master-series'
+                    assign series_tag = 'series:master'
+                  when 'x08-ji-series'
+                    assign series_tag = 'series:ji'
+                  when 'x020-pin-series'
+                    assign series_tag = 'series:pin'
+                endcase
+                assign use_tag_fallback = false
+                if coll.products.size == 0
+                  if series_tag != '' or model_tag != ''
+                    assign use_tag_fallback = true
+                  endif
+                endif
+              -%}
 
-                  {%- comment -%} Deduplication check {%- endcomment -%}
+              {%- if use_tag_fallback -%}
+                {%- paginate collections.all.products by 250 -%}
+                  {%- for product in collections.all.products -%}
+                    {%- if model_tag != '' -%}
+                      {%- unless product.tags contains model_tag -%}
+                        {%- continue -%}
+                      {%- endunless -%}
+                    {%- elsif series_tag != '' -%}
+                      {%- unless product.tags contains series_tag -%}
+                        {%- continue -%}
+                      {%- endunless -%}
+                    {%- endif -%}
+
+                    {%- assign pid_check = "," | append: product.id | append: "," -%}
+                    {%- if seen_product_ids contains pid_check -%}
+                      {%- continue -%}
+                    {%- endif -%}
+
+                    {%- assign product_series = coll.handle -%}
+                    {%- assign global_index = global_index | plus: 1 -%}
+                    {% render 'bundle-builder-card', product: product, product_series: product_series, global_index: global_index %}
+                    {%- assign seen_product_ids = seen_product_ids | append: product.id | append: "," -%}
+                  {%- endfor -%}
+                {%- endpaginate -%}
+              {%- else -%}
+                {%- for product in coll.products -%}
                   {%- assign pid_check = "," | append: product.id | append: "," -%}
                   {%- if seen_product_ids contains pid_check -%}
                     {%- continue -%}
                   {%- endif -%}
 
-                  {%- comment -%} Build series membership from product.collections {%- endcomment -%}
                   {%- assign product_series = "" -%}
                   {%- for pc in product.collections -%}
                     {%- assign pc_check = pc.handle | prepend: "," | append: "," -%}
@@ -174,78 +236,11 @@
                     {%- endif -%}
                   {%- endfor -%}
 
-                  {%- assign variant = product.selected_or_first_available_variant -%}
                   {%- assign global_index = global_index | plus: 1 -%}
-                  <div
-                    class="bundle-card"
-                    ref="cards[]"
-                    role="button"
-                    tabindex="0"
-                    aria-pressed="false"
-                    data-product-id="{{ product.id }}"
-                    data-variant-id="{{ variant.id }}"
-                    data-price="{{ variant.price }}"
-                    data-compare-price="{{ variant.compare_at_price | default: variant.price }}"
-                    data-available="{{ product.available }}"
-                    data-title="{{ product.title | escape }}"
-                    data-image="{{ product.featured_image | image_url: width: 100 }}"
-                    data-series="{{ product_series }}"
-                    on:click="/handleCardClick"
-                  >
-                    {%- comment -%} Checkbox Overlay {%- endcomment -%}
-                    <div class="bundle-card__checkbox">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                      </svg>
-                    </div>
-
-                    {%- comment -%} Product Image {%- endcomment -%}
-                    <div class="bundle-card__image">
-                      {%- if product.featured_image != blank -%}
-                        {%- liquid
-                          assign img_loading = 'lazy'
-                          assign img_priority = 'auto'
-                          if global_index <= 8
-                            assign img_loading = 'eager'
-                            assign img_priority = 'high'
-                          endif
-                        -%}
-                        <img
-                          srcset="{{ product.featured_image | image_url: width: 300 }} 300w, {{ product.featured_image | image_url: width: 500 }} 500w, {{ product.featured_image | image_url: width: 700 }} 700w"
-                          sizes="(max-width: 500px) 50vw, (max-width: 750px) 50vw, (max-width: 1300px) 33vw, 25vw"
-                          src="{{ product.featured_image | image_url: width: 500 }}"
-                          width="500"
-                          height="500"
-                          alt="{{ product.title | escape }}"
-                          loading="{{ img_loading }}"
-                          fetchpriority="{{ img_priority }}"
-                          decoding="async"
-                        >
-                      {%- endif -%}
-
-                      {%- if product.compare_at_price and product.compare_at_price > product.price -%}
-                        {%- assign discount = product.compare_at_price | minus: product.price -%}
-                        {%- assign percent = discount | times: 100 | divided_by: product.compare_at_price -%}
-                        <span class="bundle-card__badge">{{ percent }}% OFF</span>
-                      {%- endif -%}
-                    </div>
-
-                    {%- comment -%} Product Info {%- endcomment -%}
-                    <div class="bundle-card__info">
-                      <h3 class="bundle-card__title">{{ product.title }}</h3>
-                      <div class="bundle-card__price">
-                        <span class="bundle-card__current-price">{{ variant.price | money }}</span>
-                        {%- if variant.compare_at_price and variant.compare_at_price > variant.price -%}
-                          <span class="bundle-card__compare-price">{{ variant.compare_at_price | money }}</span>
-                        {%- endif -%}
-                      </div>
-                    </div>
-                  </div>
-
-                  {%- comment -%} Mark this product as rendered {%- endcomment -%}
+                  {% render 'bundle-builder-card', product: product, product_series: product_series, global_index: global_index %}
                   {%- assign seen_product_ids = seen_product_ids | append: product.id | append: "," -%}
-                {%- endunless -%}
-              {%- endfor -%}
+                {%- endfor -%}
+              {%- endif -%}
             {%- endif -%}
           {%- endfor -%}
         </div>

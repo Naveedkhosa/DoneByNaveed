@@ -1,6 +1,6 @@
 # Xinzuo Shopify clone — TYICDI hiring task
 
-## Submission
+## Submission — [DoneByNaveed](https://github.com/Naveedkhosa/DoneByNaveed)
 
 - **Fix:** Bundle Builder dead page on dev-store clone — see `NOTE.md`
 - **Loom:** _Paste your 3-minute walkthrough URL here before submitting_
